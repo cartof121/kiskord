@@ -26,17 +26,63 @@ const log = (message: string, data?: unknown) => {
   }
 };
 
-const STUN_SERVERS = {
+// ICE Servers configuration with STUN + TURN for reliable connectivity
+// TURN servers are essential for symmetric NAT and restrictive firewalls
+const ICE_SERVERS = {
   iceServers: [
+    // Google STUN servers (free, for direct connections)
     {
       urls: [
         "stun:stun.l.google.com:19302",
         "stun:stun1.l.google.com:19302",
         "stun:stun2.l.google.com:19302",
+        "stun:stun3.l.google.com:19302",
+        "stun:stun4.l.google.com:19302",
       ],
     },
+    // OpenRelay TURN servers (free public TURN)
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    // Additional free TURN from Metered
+    {
+      urls: "stun:stun.relay.metered.ca:80",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80",
+      username: "e8dd65f92c62d3e04af3a440",
+      credential: "uU1s74P4rGfHObdp",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80?transport=tcp",
+      username: "e8dd65f92c62d3e04af3a440",
+      credential: "uU1s74P4rGfHObdp",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443",
+      username: "e8dd65f92c62d3e04af3a440",
+      credential: "uU1s74P4rGfHObdp",
+    },
+    {
+      urls: "turns:global.relay.metered.ca:443?transport=tcp",
+      username: "e8dd65f92c62d3e04af3a440",
+      credential: "uU1s74P4rGfHObdp",
+    },
   ],
-  iceCandidatePoolSize: 10, // Daha fazla ICE candidate topla
+  iceCandidatePoolSize: 10,
+  iceTransportPolicy: "all" as const, // Try both direct and relay
 };
 
 // Helper to check speaking status and get audio level
@@ -517,7 +563,7 @@ export function useWebRTC(
 
   // Helper to create PeerConnection
   const createPeerConnection = useCallback((targetUserId: string, stream: MediaStream) => {
-    const pc = new RTCPeerConnection(STUN_SERVERS);
+    const pc = new RTCPeerConnection(ICE_SERVERS);
     
     // Add local tracks with logging
     const tracks = stream.getTracks();
@@ -546,17 +592,38 @@ export function useWebRTC(
         log(`Successfully connected to ${targetUserId}`);
       } else if (pc.connectionState === 'failed') {
         log(`Connection failed with ${targetUserId}, ICE state: ${pc.iceConnectionState}`);
-        // Temizlik yap ama hemen silme, reconnect şansı ver
-        setTimeout(() => {
-          if (pc.connectionState === 'failed') {
-            log(`Connection still failed with ${targetUserId}, closing...`);
+        // Try ICE restart first before giving up
+        log(`Attempting ICE restart for ${targetUserId}...`);
+        try {
+          pc.restartIce();
+          // Give ICE restart time to work
+          setTimeout(() => {
+            if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+              log(`ICE restart failed for ${targetUserId}, cleaning up...`);
+              pc.close();
+              delete peerConnections.current[targetUserId];
+            }
+          }, 10000); // 10 second timeout for ICE restart
+        } catch (e) {
+          log(`ICE restart not supported, closing connection with ${targetUserId}`);
+          setTimeout(() => {
             pc.close();
             delete peerConnections.current[targetUserId];
-          }
-        }, 3000); // 3 saniye bekle
+          }, 3000);
+        }
       } else if (pc.connectionState === 'disconnected') {
         log(`Connection disconnected with ${targetUserId}, waiting for reconnection...`);
-        // Disconnected durumunda hemen kapatma, reconnect deneyebilir
+        // Disconnected durumunda bekle, ICE restart otomatik denenebilir
+        setTimeout(() => {
+          if (pc.connectionState === 'disconnected') {
+            log(`Still disconnected from ${targetUserId}, attempting ICE restart...`);
+            try {
+              pc.restartIce();
+            } catch (e) {
+              log(`Could not restart ICE for ${targetUserId}`);
+            }
+          }
+        }, 5000); // 5 saniye bekle sonra ICE restart dene
       }
     };
     
