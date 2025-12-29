@@ -20,24 +20,24 @@ export function Room() {
   const [showSettings, setShowSettings] = useState(false);
   
   const [audioOptions, setAudioOptions] = useState<AudioProcessingOptions>({
-      audioQuality: "ultra",      // ULTRA mode (Discord-level) varsayılan
+      audioQuality: "balanced",   // Balanced mode - daha stabil
       useRNNoise: true,           // RNNoise varsayılan olarak açık
       noiseSuppression: false,    // Browser NS kapalı (RNNoise kullanıyoruz)
-      echoCancellation: false,    // Browser EC kapalı (RNNoise kullanıyoruz)
-      autoGainControl: false,     // Browser AGC kapalı (RNNoise kullanıyoruz)
+      echoCancellation: true,     // Browser EC açık (feedback önleme)
+      autoGainControl: false,     // Browser AGC kapalı
       suppressionLevel: "medium",
-      vadEnabled: true,           // VAD açık
-      vadThreshold: 80,           // Maksimum agresif (nefes/klavye/alkış filtreleme)
-      vadGracePeriod: 150,        // Çok kısa grace period
+      vadEnabled: false,          // VAD kapalı (ses kesintilerine sebep oluyor)
+      vadThreshold: 40,           // Daha düşük threshold
+      vadGracePeriod: 300,        // Daha uzun grace period
       highPassFilter: true,       // HPF açık
-      highPassCutoff: 150,        // Çok yüksek cutoff (nefes seslerini kes)
-      // Ultra features
+      highPassCutoff: 80,         // Daha düşük cutoff (ses kaybını önle)
+      // Balanced features
       useNoiseGate: true,
-      noiseGateThreshold: -70,    // Ekstrem agresif gate (nefes/klavye/alkış)
+      noiseGateThreshold: -50,    // Daha yumuşak gate (-70 çok agresifti)
       useVoiceEQ: true,
-      useDeEsser: true,
+      useDeEsser: false,          // De-esser kapalı (cızırtıya sebep olabilir)
       useLimiter: true,
-      outputGain: 1.4
+      outputGain: 1.2             // Daha düşük gain (distortion önleme)
   });
 
   // Redirect if not authenticated

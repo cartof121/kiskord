@@ -351,19 +351,15 @@ export function useWebRTC(
             vadRef.current = vad;
             log(`VAD enabled: threshold=${vad['threshold']}`);
             
-            // Start VAD monitoring
+            // VAD artık sadece gösterge için kullanılıyor, audio track'i disable etmiyor
+            // Bu sayede ses kesintisi olmuyor
             vadIntervalRef.current = setInterval(() => {
-              if (vadRef.current && localStreamRef.current) {
-                const isSpeaking = vadRef.current.isSpeaking();
-                const audioTrack = localStreamRef.current.getAudioTracks()[0];
-                
-                if (audioTrack && !isMuted) {
-                  // Only affect track if user hasn't manually muted
-                  // VAD will gate the audio, but respect user's mute state
-                  audioTrack.enabled = isSpeaking;
-                }
+              if (vadRef.current) {
+                // Sadece speaking state'i güncellemek için kullan
+                // Track'i disable etme - Noise Gate bunu daha iyi yapıyor
+                vadRef.current.isSpeaking();
               }
-            }, 50); // Check every 50ms
+            }, 100); // 100ms interval (daha az CPU kullanımı)
           }
 
           // Use the processed stream for transmission
