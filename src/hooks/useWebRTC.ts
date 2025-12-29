@@ -249,23 +249,13 @@ export function useWebRTC(
                                     currentAudioOptionsRef.current.audioQuality !== 'basic';
       
       if (!useRNNoiseProcessing) {
-        // BASIC MODE: Simple, stable audio chain without RNNoise
-        log("Setting up BASIC audio chain (no RNNoise, browser processing only)...");
+        // CLEAN MODE: Browser işlemcisini kullan (Discord ile aynı teknoloji)
+        // Chrome'un yerleşik noiseSuppression'ı RNNoise tabanlı - profesyonel kalite
+        log("Setting up CLEAN audio mode (browser-native processing)...");
         
-        // Simple high-pass filter to remove rumble
-        if (currentAudioOptionsRef.current.highPassFilter !== false) {
-          const hpf = new HighPassFilter(
-            audioContext, 
-            currentAudioOptionsRef.current.highPassCutoff || 100
-          );
-          source.connect(hpf.getNode());
-          hpf.getNode().connect(destination);
-          highPassFilterRef.current = hpf;
-          log(`Basic HPF enabled: ${hpf.getNode().frequency.value}Hz cutoff`);
-        } else {
-          // Direct connection
-          source.connect(destination);
-        }
+        // Direkt bağlantı - browser zaten tüm işlemeyi yaptı
+        // HPF gereksiz çünkü browser NS zaten düşük frekanslara bakıyor
+        source.connect(destination);
         
         // Use the processed stream for transmission
         const processedStream = destination.stream;

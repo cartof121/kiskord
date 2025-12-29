@@ -19,25 +19,26 @@ export function Room() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
+  // CLEAN MODE: Browser'ın native noise suppression'ı Discord ile aynı teknoloji (RNNoise tabanlı)
+  // Custom processing eklemek sadece sorun çıkarır, browser zaten profesyonel seviyede işliyor
   const [audioOptions, setAudioOptions] = useState<AudioProcessingOptions>({
-      audioQuality: "basic",      // Basic mode - en stabil, cızırtı yok
-      useRNNoise: false,          // RNNoise KAPALI - cızırtı kaynağı olabilir
-      noiseSuppression: true,     // Browser NS AÇIK - daha stabil
-      echoCancellation: true,     // Browser EC açık
-      autoGainControl: true,      // Browser AGC açık
-      suppressionLevel: "high",   // Yüksek seviye browser gürültü kesme
-      vadEnabled: false,          // VAD kapalı
+      audioQuality: "basic",      // Clean mode - sadece browser processing
+      useRNNoise: false,          // KAPALI - Browser zaten RNNoise kullanıyor
+      noiseSuppression: true,     // ✅ Chrome'un yerleşik gürültü kesme (profesyonel seviye)
+      echoCancellation: true,     // ✅ Yankı önleme
+      autoGainControl: true,      // ✅ Otomatik ses seviyesi
+      suppressionLevel: "high",
+      vadEnabled: false,
       vadThreshold: 40,
       vadGracePeriod: 300,
-      highPassFilter: true,       // HPF açık - düşük frekans gürültü kesme
-      highPassCutoff: 100,        // 100Hz altını kes
-      // Basic mode - minimal processing
-      useNoiseGate: false,        // Noise gate kapalı
+      highPassFilter: false,      // KAPALI - Browser zaten yapıyor
+      highPassCutoff: 100,
+      useNoiseGate: false,
       noiseGateThreshold: -50,
-      useVoiceEQ: false,          // EQ kapalı
-      useDeEsser: false,          // De-esser kapalı
-      useLimiter: false,          // Limiter kapalı
-      outputGain: 1.0             // Normal gain
+      useVoiceEQ: false,
+      useDeEsser: false,
+      useLimiter: false,
+      outputGain: 1.0
   });
 
   // Redirect if not authenticated
