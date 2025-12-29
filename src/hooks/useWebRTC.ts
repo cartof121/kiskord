@@ -29,9 +29,14 @@ const log = (message: string, data?: unknown) => {
 const STUN_SERVERS = {
   iceServers: [
     {
-      urls: ["stun:stun.l.google.com:19302"],
+      urls: [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+        "stun:stun2.l.google.com:19302",
+      ],
     },
   ],
+  iceCandidatePoolSize: 10, // Daha fazla ICE candidate topla
 };
 
 // Helper to check speaking status and get audio level
@@ -468,11 +473,28 @@ export function useWebRTC(
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
       log(`Connection state with ${targetUserId}: ${pc.connectionState}`);
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        log(`Connection lost with ${targetUserId}, closing...`);
-        pc.close();
-        delete peerConnections.current[targetUserId];
+      
+      if (pc.connectionState === 'connected') {
+        log(`Successfully connected to ${targetUserId}`);
+      } else if (pc.connectionState === 'failed') {
+        log(`Connection failed with ${targetUserId}, ICE state: ${pc.iceConnectionState}`);
+        // Temizlik yap ama hemen silme, reconnect şansı ver
+        setTimeout(() => {
+          if (pc.connectionState === 'failed') {
+            log(`Connection still failed with ${targetUserId}, closing...`);
+            pc.close();
+            delete peerConnections.current[targetUserId];
+          }
+        }, 3000); // 3 saniye bekle
+      } else if (pc.connectionState === 'disconnected') {
+        log(`Connection disconnected with ${targetUserId}, waiting for reconnection...`);
+        // Disconnected durumunda hemen kapatma, reconnect deneyebilir
       }
+    };
+    
+    // ICE connection state değişikliklerini de izle
+    pc.oniceconnectionstatechange = () => {
+      log(`ICE connection state with ${targetUserId}: ${pc.iceConnectionState}`);
     };
 
     // Handle remote stream
@@ -579,16 +601,21 @@ export function useWebRTC(
                 log(`Received offer from ${fromUserId}`);
                 const pc = createPeerConnection(fromUserId, stream);
                 
-                await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(data.sdp)));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(data.sdp)));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
 
-                const answerRef = collection(db, "rooms", roomId, "participants", fromUserId, "incoming_answers");
-                await addDoc(answerRef, {
-                    sdp: JSON.stringify(answer),
-                    from: user.uid,
-                    type: 'answer'
-                });
+                    const answerRef = collection(db, "rooms", roomId, "participants", fromUserId, "incoming_answers");
+                    await addDoc(answerRef, {
+                        sdp: JSON.stringify(answer),
+                        from: user.uid,
+                        type: 'answer'
+                    });
+                    log(`Sent answer to ${fromUserId}`);
+                } catch (e) {
+                    log(`Failed to handle offer from ${fromUserId}`);
+                }
             }
             await deleteDoc(change.doc.ref);
           }
@@ -604,8 +631,15 @@ export function useWebRTC(
                   const fromUserId = data.from;
                   const pc = peerConnections.current[fromUserId];
                   if (pc && pc.signalingState === 'have-local-offer') {
-                      log(`Received answer from ${fromUserId}`);
-                      await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(data.sdp)));
+                      try {
+                          log(`Received answer from ${fromUserId}`);
+                          await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(data.sdp)));
+                          log(`Set remote description for ${fromUserId}`);
+                      } catch (e) {
+                          log(`Failed to set remote description for ${fromUserId}`);
+                      }
+                  } else if (pc) {
+                      log(`Ignoring answer from ${fromUserId}, wrong signaling state: ${pc.signalingState}`);
                   }
                   await deleteDoc(change.doc.ref);
               }
@@ -620,8 +654,14 @@ export function useWebRTC(
                   const data = change.doc.data();
                   const fromUserId = data.from;
                   const pc = peerConnections.current[fromUserId];
-                  if (pc) {
-                      await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                  if (pc && pc.remoteDescription) {
+                      // Sadece remote description setlenmisse ICE candidate ekle
+                      try {
+                          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                          log(`Added ICE candidate from ${fromUserId}`);
+                      } catch (e) {
+                          log(`Failed to add ICE candidate from ${fromUserId}`);
+                      }
                   }
                   await deleteDoc(change.doc.ref);
               }
