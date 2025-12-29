@@ -29,6 +29,8 @@ export const ConnectionMonitor = ({
     packetLoss: 0,
     bitrate: 0,
   });
+  
+  const lastBytesRef = { current: 0, timestamp: 0 };
 
   useEffect(() => {
     if (!peerConnection || !isConnected) {
@@ -42,27 +44,49 @@ export const ConnectionMonitor = ({
         let latency = 0;
         let jitter = 0;
         let packetLoss = 0;
-        let bitrate = 0;
+        let bytesReceived = 0;
+        let packetsReceived = 0;
 
         statsReport.forEach((report) => {
-          // Inbound audio stats
+          // Inbound audio stats (remote-inbound-rtp or inbound-rtp)
           if (report.type === 'inbound-rtp' && report.kind === 'audio') {
             jitter = (report.jitter || 0) * 1000; // Convert to ms
             packetLoss = report.packetsLost || 0;
-            bitrate = Math.round((report.bytesReceived || 0) * 8 / 1024); // kbps
+            bytesReceived = report.bytesReceived || 0;
+            packetsReceived = report.packetsReceived || 0;
           }
 
-          // Candidate pair for RTT
+          // Remote inbound for RTT (more accurate)
+          if (report.type === 'remote-inbound-rtp' && report.kind === 'audio') {
+            latency = report.roundTripTime ? report.roundTripTime * 1000 : 0;
+          }
+
+          // Candidate pair for RTT (fallback)
           if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-            latency = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
+            if (latency === 0) {
+              latency = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
+            }
           }
         });
+
+        // Calculate bitrate from bytes difference
+        const now = Date.now();
+        let bitrate = 0;
+        if (lastBytesRef.timestamp > 0) {
+          const timeDiff = (now - lastBytesRef.timestamp) / 1000; // seconds
+          const bytesDiff = bytesReceived - lastBytesRef.current;
+          if (timeDiff > 0 && bytesDiff >= 0) {
+            bitrate = Math.round((bytesDiff * 8) / timeDiff / 1000); // kbps
+          }
+        }
+        lastBytesRef.current = bytesReceived;
+        lastBytesRef.timestamp = now;
 
         setStats({
           latency: Math.round(latency),
           jitter: Math.round(jitter * 10) / 10, // 1 decimal
           packetLoss: Math.round(packetLoss),
-          bitrate: Math.round(bitrate),
+          bitrate: bitrate,
         });
       } catch (error) {
         console.error('[ConnectionMonitor] Error getting stats:', error);
@@ -76,6 +100,9 @@ export const ConnectionMonitor = ({
   const getQualityColor = () => {
     if (!isConnected) return 'text-gray-500';
     
+    // If no stats yet, show as measuring
+    if (stats.latency === 0 && stats.bitrate === 0) return 'text-blue-400';
+    
     const totalDelay = stats.latency + stats.jitter;
     if (totalDelay < 50) return 'text-green-500';
     if (totalDelay < 100) return 'text-yellow-500';
@@ -85,6 +112,9 @@ export const ConnectionMonitor = ({
 
   const getQualityLabel = () => {
     if (!isConnected) return 'Disconnected';
+    
+    // If no stats yet, show as measuring
+    if (stats.latency === 0 && stats.bitrate === 0) return 'Measuring...';
     
     const totalDelay = stats.latency + stats.jitter;
     if (totalDelay < 50) return 'Excellent';
