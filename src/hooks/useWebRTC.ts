@@ -371,6 +371,7 @@ export function useWebRTC(
           const processedStream = destination.stream;
           const processedAudioTrack = processedStream.getAudioTracks()[0];
           if (processedAudioTrack) {
+               log(`Processed audio track ready: enabled=${processedAudioTrack.enabled}, readyState=${processedAudioTrack.readyState}`);
                const finalStream = new MediaStream();
                finalStream.addTrack(processedAudioTrack);
                
@@ -383,21 +384,40 @@ export function useWebRTC(
                }
                
                return finalStream;
+          } else {
+               log("No processed audio track available, using original stream");
+               localStreamRef.current = stream;
+               setLocalStream(stream);
+               return stream;
           }
 
       } catch (e) {
           log("Error setting up RNNoise graph, falling back to simple graph");
           
-          // Fallback graph
+          // Fallback graph - 중요: destination에 연결해야 함!
           const compressor = audioContext.createDynamicsCompressor();
           source.connect(compressor);
           compressor.connect(analyser);
+          compressor.connect(destination); // CRITICAL: destination에 연결
           
           audioContextRef.current = audioContext;
           if (user) {
               analysersRef.current[user.uid] = analyser;
           }
           
+          // Use destination stream
+          const fallbackTrack = destination.stream.getAudioTracks()[0];
+          if (fallbackTrack) {
+              const fallbackStream = new MediaStream([fallbackTrack]);
+              localStreamRef.current = fallbackStream;
+              setLocalStream(fallbackStream);
+              return fallbackStream;
+          }
+          
+          // Last resort: original stream
+          log("Fallback failed, using original stream");
+          localStreamRef.current = stream;
+          setLocalStream(stream);
           return stream;
       }
 
@@ -454,8 +474,11 @@ export function useWebRTC(
   const createPeerConnection = useCallback((targetUserId: string, stream: MediaStream) => {
     const pc = new RTCPeerConnection(STUN_SERVERS);
     
-    // Add local tracks
-    stream.getTracks().forEach((track) => {
+    // Add local tracks with logging
+    const tracks = stream.getTracks();
+    log(`Adding ${tracks.length} tracks to connection with ${targetUserId}`);
+    tracks.forEach((track) => {
+      log(`Adding track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
       pc.addTrack(track, stream);
     });
 
@@ -508,13 +531,22 @@ export function useWebRTC(
         audioElement = document.createElement("audio");
         audioElement.id = `audio-${targetUserId}`;
         audioElement.autoplay = true;
-        const audioEl = audioElement as HTMLAudioElement & { playsinline?: boolean };
-        audioEl.playsinline = true;
+        audioElement.playsInline = true;
+        audioElement.muted = false; // CRITICAL: Remote audio should NOT be muted
+        audioElement.volume = 1.0; // Full volume
         document.body.appendChild(audioElement);
         audioElementsRef.current.set(targetUserId, audioElement);
         log(`Created audio element for ${targetUserId}`);
       }
+      
       audioElement.srcObject = remoteStream;
+      
+      // Explicitly play the audio (some browsers require this)
+      audioElement.play().then(() => {
+        log(`Audio playback started for ${targetUserId}`);
+      }).catch((e) => {
+        log(`Failed to start audio playback for ${targetUserId}`);
+      });
 
       // Audio Analysis for Remote Stream
       if (audioContextRef.current) {
