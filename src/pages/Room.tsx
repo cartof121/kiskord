@@ -20,24 +20,24 @@ export function Room() {
   const [showSettings, setShowSettings] = useState(false);
   
   const [audioOptions, setAudioOptions] = useState<AudioProcessingOptions>({
-      audioQuality: "balanced",   // Balanced mode - daha stabil
-      useRNNoise: true,           // RNNoise varsayılan olarak açık
-      noiseSuppression: false,    // Browser NS kapalı (RNNoise kullanıyoruz)
-      echoCancellation: true,     // Browser EC açık (feedback önleme)
-      autoGainControl: false,     // Browser AGC kapalı
-      suppressionLevel: "medium",
-      vadEnabled: false,          // VAD kapalı (ses kesintilerine sebep oluyor)
-      vadThreshold: 40,           // Daha düşük threshold
-      vadGracePeriod: 300,        // Daha uzun grace period
-      highPassFilter: true,       // HPF açık
-      highPassCutoff: 80,         // Daha düşük cutoff (ses kaybını önle)
-      // Balanced features
-      useNoiseGate: true,
-      noiseGateThreshold: -50,    // Daha yumuşak gate (-70 çok agresifti)
-      useVoiceEQ: true,
-      useDeEsser: false,          // De-esser kapalı (cızırtıya sebep olabilir)
-      useLimiter: true,
-      outputGain: 1.2             // Daha düşük gain (distortion önleme)
+      audioQuality: "basic",      // Basic mode - en stabil, cızırtı yok
+      useRNNoise: false,          // RNNoise KAPALI - cızırtı kaynağı olabilir
+      noiseSuppression: true,     // Browser NS AÇIK - daha stabil
+      echoCancellation: true,     // Browser EC açık
+      autoGainControl: true,      // Browser AGC açık
+      suppressionLevel: "high",   // Yüksek seviye browser gürültü kesme
+      vadEnabled: false,          // VAD kapalı
+      vadThreshold: 40,
+      vadGracePeriod: 300,
+      highPassFilter: true,       // HPF açık - düşük frekans gürültü kesme
+      highPassCutoff: 100,        // 100Hz altını kes
+      // Basic mode - minimal processing
+      useNoiseGate: false,        // Noise gate kapalı
+      noiseGateThreshold: -50,
+      useVoiceEQ: false,          // EQ kapalı
+      useDeEsser: false,          // De-esser kapalı
+      useLimiter: false,          // Limiter kapalı
+      outputGain: 1.0             // Normal gain
   });
 
   // Redirect if not authenticated

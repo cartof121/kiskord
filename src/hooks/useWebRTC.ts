@@ -244,7 +244,51 @@ export function useWebRTC(
       
       audioMonitorGainRef.current = monitorGain;
       
-      // RNNoise Node
+      // Check if we should use RNNoise or basic mode
+      const useRNNoiseProcessing = currentAudioOptionsRef.current.useRNNoise && 
+                                    currentAudioOptionsRef.current.audioQuality !== 'basic';
+      
+      if (!useRNNoiseProcessing) {
+        // BASIC MODE: Simple, stable audio chain without RNNoise
+        log("Setting up BASIC audio chain (no RNNoise, browser processing only)...");
+        
+        // Simple high-pass filter to remove rumble
+        if (currentAudioOptionsRef.current.highPassFilter !== false) {
+          const hpf = new HighPassFilter(
+            audioContext, 
+            currentAudioOptionsRef.current.highPassCutoff || 100
+          );
+          source.connect(hpf.getNode());
+          hpf.getNode().connect(destination);
+          highPassFilterRef.current = hpf;
+          log(`Basic HPF enabled: ${hpf.getNode().frequency.value}Hz cutoff`);
+        } else {
+          // Direct connection
+          source.connect(destination);
+        }
+        
+        // Use the processed stream for transmission
+        const processedStream = destination.stream;
+        const processedAudioTrack = processedStream.getAudioTracks()[0];
+        if (processedAudioTrack) {
+          log(`Basic audio track ready: enabled=${processedAudioTrack.enabled}`);
+          const finalStream = new MediaStream();
+          finalStream.addTrack(processedAudioTrack);
+          
+          localStreamRef.current = finalStream;
+          setLocalStream(finalStream);
+          
+          audioContextRef.current = audioContext;
+          if (user) {
+            analysersRef.current[user.uid] = analyser;
+          }
+          
+          log("BASIC audio chain setup complete - using browser noise suppression");
+          return finalStream;
+        }
+      }
+      
+      // RNNoise / Professional Mode
       try {
           log("Creating RNNoise AudioWorkletNode...");
           const rnnoiseNode = new AudioWorkletNode(audioContext, 'rnnoise-processor');
