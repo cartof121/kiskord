@@ -531,7 +531,7 @@ export function useWebRTC(
         audioElement = document.createElement("audio");
         audioElement.id = `audio-${targetUserId}`;
         audioElement.autoplay = true;
-        audioElement.playsInline = true;
+        (audioElement as HTMLMediaElement & { playsInline?: boolean }).playsInline = true;
         audioElement.muted = false; // CRITICAL: Remote audio should NOT be muted
         audioElement.volume = 1.0; // Full volume
         document.body.appendChild(audioElement);
