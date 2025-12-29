@@ -142,6 +142,7 @@ export function useWebRTC(
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   
   const peerConnections = useRef<{ [key: string]: RTCPeerConnection }>({});
+  const pendingIceCandidates = useRef<{ [key: string]: RTCIceCandidateInit[] }>({}); // Queue for early ICE candidates
   const localStreamRef = useRef<MediaStream | null>(null);
   const participantsRef = useRef<Participant[]>([]);
   const currentAudioOptionsRef = useRef<AudioProcessingOptions>(audioOptions);
@@ -785,6 +786,22 @@ export function useWebRTC(
                 
                 try {
                     await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(data.sdp)));
+                    
+                    // Process any queued ICE candidates now that remote description is set
+                    const queuedCandidates = pendingIceCandidates.current[fromUserId];
+                    if (queuedCandidates && queuedCandidates.length > 0) {
+                        log(`Processing ${queuedCandidates.length} queued ICE candidates for ${fromUserId}`);
+                        for (const candidate of queuedCandidates) {
+                            try {
+                                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                                log(`Added queued ICE candidate for ${fromUserId}`);
+                            } catch (e) {
+                                log(`Failed to add queued ICE candidate for ${fromUserId}`);
+                            }
+                        }
+                        delete pendingIceCandidates.current[fromUserId];
+                    }
+                    
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
 
@@ -817,6 +834,21 @@ export function useWebRTC(
                           log(`Received answer from ${fromUserId}`);
                           await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(data.sdp)));
                           log(`Set remote description for ${fromUserId}`);
+                          
+                          // Process queued ICE candidates
+                          const queuedCandidates = pendingIceCandidates.current[fromUserId];
+                          if (queuedCandidates && queuedCandidates.length > 0) {
+                              log(`Processing ${queuedCandidates.length} queued ICE candidates for ${fromUserId}`);
+                              for (const candidate of queuedCandidates) {
+                                  try {
+                                      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                                      log(`Added queued ICE candidate for ${fromUserId}`);
+                                  } catch (e) {
+                                      log(`Failed to add queued ICE candidate for ${fromUserId}`);
+                                  }
+                              }
+                              delete pendingIceCandidates.current[fromUserId];
+                          }
                       } catch (e) {
                           log(`Failed to set remote description for ${fromUserId}`);
                       }
@@ -836,14 +868,29 @@ export function useWebRTC(
                   const data = change.doc.data();
                   const fromUserId = data.from;
                   const pc = peerConnections.current[fromUserId];
+                  
                   if (pc && pc.remoteDescription) {
-                      // Sadece remote description setlenmisse ICE candidate ekle
+                      // Remote description is set, add candidate immediately
                       try {
                           await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
                           log(`Added ICE candidate from ${fromUserId}`);
                       } catch (e) {
                           log(`Failed to add ICE candidate from ${fromUserId}`);
                       }
+                  } else if (pc) {
+                      // Remote description not set yet, queue the candidate
+                      log(`Queueing ICE candidate from ${fromUserId} (remote description not ready)`);
+                      if (!pendingIceCandidates.current[fromUserId]) {
+                          pendingIceCandidates.current[fromUserId] = [];
+                      }
+                      pendingIceCandidates.current[fromUserId].push(data.candidate);
+                  } else {
+                      // No peer connection yet, queue the candidate
+                      log(`Queueing ICE candidate from ${fromUserId} (no peer connection yet)`);
+                      if (!pendingIceCandidates.current[fromUserId]) {
+                          pendingIceCandidates.current[fromUserId] = [];
+                      }
+                      pendingIceCandidates.current[fromUserId].push(data.candidate);
                   }
                   await deleteDoc(change.doc.ref);
               }
@@ -904,6 +951,9 @@ export function useWebRTC(
         }
       });
       remoteStreamSourcesRef.current.clear();
+
+      // Clear pending ICE candidates
+      pendingIceCandidates.current = {};
 
       // Remove from database
       if (roomId && user) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Activity, Wifi, WifiOff, Users, Loader2 } from 'lucide-react';
 
 interface ConnectionStats {
@@ -30,7 +30,7 @@ export const ConnectionMonitor = ({
     bitrate: 0,
   });
   
-  const lastBytesRef = { current: 0, timestamp: 0 };
+  const lastBytesRef = useRef({ bytes: 0, timestamp: 0 });
 
   useEffect(() => {
     if (!peerConnection || !isConnected) {
@@ -72,15 +72,14 @@ export const ConnectionMonitor = ({
         // Calculate bitrate from bytes difference
         const now = Date.now();
         let bitrate = 0;
-        if (lastBytesRef.timestamp > 0) {
-          const timeDiff = (now - lastBytesRef.timestamp) / 1000; // seconds
-          const bytesDiff = bytesReceived - lastBytesRef.current;
+        if (lastBytesRef.current.timestamp > 0) {
+          const timeDiff = (now - lastBytesRef.current.timestamp) / 1000; // seconds
+          const bytesDiff = bytesReceived - lastBytesRef.current.bytes;
           if (timeDiff > 0 && bytesDiff >= 0) {
             bitrate = Math.round((bytesDiff * 8) / timeDiff / 1000); // kbps
           }
         }
-        lastBytesRef.current = bytesReceived;
-        lastBytesRef.timestamp = now;
+        lastBytesRef.current = { bytes: bytesReceived, timestamp: now };
 
         setStats({
           latency: Math.round(latency),
